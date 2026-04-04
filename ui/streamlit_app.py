@@ -203,10 +203,19 @@ elif selected_page == "Loads":
         if uploaded is not None:
             try:
                 if uploaded.name.endswith(".xlsx"):
-                    from io_mod_excel import import_combinations_excel  # noqa
-                else:
-                    pass
-                st.info("File upload parsed. (Use io/excel_import.py or io/csv_import.py in scripts.)")
+                    from io.excel_import import import_combinations_excel
+                    import io as _io
+                    tmp_ls = import_combinations_excel(_io.BytesIO(uploaded.read()))
+                    for combo in tmp_ls.combinations:
+                        st.session_state["load_set"].add_combination(combo)
+                    st.success(f"Imported {len(tmp_ls.combinations)} combinations from file.")
+                elif uploaded.name.endswith(".csv"):
+                    from io.csv_import import import_combinations_csv
+                    import io as _io
+                    tmp_ls = import_combinations_csv(_io.StringIO(uploaded.read().decode()))
+                    for combo in tmp_ls.combinations:
+                        st.session_state["load_set"].add_combination(combo)
+                    st.success(f"Imported {len(tmp_ls.combinations)} combinations from file.")
             except Exception as e:
                 st.error(str(e))
 

@@ -185,6 +185,8 @@ def evaluate_design(
     results_dict["design_res"]    = design_res
 
     # ---- Objective --------------------------------------------------
+    # Note: evaluate_design always uses OptimizationObjective() defaults here.
+    # The actual objective is computed again in optimize_footing using the user's config.
     obj = _compute_objective(B, L, h, design_res, OptimizationObjective())
     results_dict["objective"] = obj
 
@@ -301,6 +303,8 @@ def optimize_footing(
 
         if feasible:
             feasible_results.append(res)
+            # Use the already-computed objective from evaluate_design to avoid
+            # double-computation with a potentially different objective config
             obj_val = _compute_objective(B, L, h, res.get("design_res"), objective)
             if obj_val < best_obj:
                 best_obj = obj_val
