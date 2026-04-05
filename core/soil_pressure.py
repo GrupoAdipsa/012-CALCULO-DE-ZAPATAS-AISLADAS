@@ -84,7 +84,8 @@ def compute_total_load(
     the footing volume itself).  That is, the soil block B×L×(Df-h) plus the
     contribution of the footing own weight B×L×h×γ_conc.
 
-    Moments include any contribution from column eccentricity if ex/ey ≠ 0.
+    Moments include transfer from horizontal shear using e = Df, plus any
+    contribution from column eccentricity if ex/ey ≠ 0.
     """
     A = geom.B * geom.L
 
@@ -99,9 +100,10 @@ def compute_total_load(
 
     N_total = combo.N + W_footing + W_soil
 
-    # Additional moment from column eccentricity (N acts at ex, ey from centre)
-    Mx_total = combo.Mx + combo.Vy * geom.h + combo.N * geom.ey
-    My_total = combo.My + combo.Vx * geom.h + combo.N * geom.ex
+    # Additional moment from horizontal shear using e = Df (user convention).
+    # Df is measured from the top of pedestal to ground level in this model.
+    Mx_total = combo.Mx + combo.Vy * soil.Df + combo.N * geom.ey
+    My_total = combo.My + combo.Vx * soil.Df + combo.N * geom.ex
 
     return N_total, Mx_total, My_total
 
@@ -265,16 +267,20 @@ def analyze_pressure(
         contact_ratio = 1.0
     else:
         if not allow_partial_contact:
-            # Treat as failed — no partial contact allowed
+            # Compute the actual partial-contact pressure for reporting, but
+            # mark the combination as failed because partial contact is not allowed.
+            q_max, eff_B, eff_L = compute_pressures_partial_contact(
+                N_total, Mx_total, My_total, geom.B, geom.L
+            )
             return PressureResult(
                 combo_name=combo.name,
-                q_max=999999.0,
+                q_max=q_max,
                 q_min=0.0,
                 eccentricity_x=ex,
                 eccentricity_y=ey,
                 full_contact=False,
-                effective_area=0.0,
-                contact_ratio=0.0,
+                effective_area=eff_B * eff_L,
+                contact_ratio=(eff_B * eff_L) / A_total,
                 passes_qa=False,
                 N_total=N_total,
             )

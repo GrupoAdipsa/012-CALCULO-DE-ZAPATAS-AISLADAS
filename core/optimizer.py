@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from core.combinations import CombinationFactors, generate_combinations
+from core.anchorage import check_moment_transfer
 from core.loads import LoadSet
 from core.rc_design import MaterialProperties, design_footing
 from core.soil_pressure import (
@@ -53,6 +54,8 @@ class OptimizationConstraints:
 
     allow_partial_contact: bool = True
     force_square: bool = False
+    require_anchorage_check: bool = False
+    require_fixed_base: bool = False
 
     step_B: float = 0.05
     step_L: float = 0.05
@@ -108,7 +111,8 @@ def evaluate_design(
     2. Pressure check on ALL combinations (service and ultimate)
     3. Stability check on ALL service combinations
     4. RC design on critical ultimate combination
-    5. Design passes_all
+    5. Anchorage / transfer check on governing moment combo (optional)
+    6. Design passes_all
     """
     geom = FootingGeometry(B=B, L=L, h=h, bx=column_bx, by=column_by, cover=cover)
     results_dict: Dict[str, Any] = {"B": B, "L": L, "h": h}
@@ -164,6 +168,7 @@ def evaluate_design(
     ]
 
     design_res = None
+    anch_res = None
     if ultimate_combos and ultimate_prs:
         # Critical = maximum q_max among ultimate combos
         crit_idx = int(np.argmax([pr.q_max for pr in ultimate_prs]))
@@ -177,12 +182,28 @@ def evaluate_design(
         if not design_res.passes_all:
             fail_reasons.append("rc_design")
 
+    # ---- Anchorage / moment-transfer check -------------------------
+    if constraints.require_anchorage_check and press_results:
+        max_m_combo = max(all_combos, key=lambda c: abs(c.Mx) + abs(c.My))
+        max_m_pr = press_results[all_combos.index(max_m_combo)]
+        anch_res = check_moment_transfer(max_m_combo, geom, materials, max_m_pr)
+
+        if not anch_res.passes_shear_friction:
+            fail_reasons.append("anchorage_shear_friction")
+        if not anch_res.passes_development:
+            fail_reasons.append("anchorage_development")
+        if not anch_res.passes_moment_transfer:
+            fail_reasons.append("anchorage_moment_transfer")
+        if constraints.require_fixed_base and not anch_res.can_be_fixed:
+            fail_reasons.append("fixed_base_not_justified")
+
     is_feasible = len(fail_reasons) == 0
     results_dict["fail_reasons"]  = fail_reasons
     results_dict["is_feasible"]   = is_feasible
     results_dict["press_results"] = press_results
     results_dict["stab_results"]  = stab_results
     results_dict["design_res"]    = design_res
+    results_dict["anchorage_res"] = anch_res
 
     # ---- Objective --------------------------------------------------
     # Note: evaluate_design always uses OptimizationObjective() defaults here.

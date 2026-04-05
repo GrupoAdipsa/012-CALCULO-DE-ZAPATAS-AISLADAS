@@ -62,6 +62,21 @@ def tight_constraints():
         step_B=0.25, step_L=0.25, step_h=0.20,
         force_square=True,
         allow_partial_contact=True,
+        require_anchorage_check=False,
+    )
+
+
+@pytest.fixture
+def strict_constraints():
+    """Same search space, but requiring anchorage safety as well."""
+    return OptimizationConstraints(
+        B_min=1.5, B_max=3.0,
+        L_min=1.5, L_max=3.0,
+        h_min=0.40, h_max=0.80,
+        step_B=0.25, step_L=0.25, step_h=0.20,
+        force_square=True,
+        allow_partial_contact=True,
+        require_anchorage_check=True,
     )
 
 
@@ -213,3 +228,13 @@ class TestNoSolution:
             initial_geom, simple_load_set, soil, mats, stab, impossible_constraints, obj
         )
         assert result.n_iterations > 0
+
+    def test_strict_optimization_reports_anchorage_failures(
+        self, simple_load_set, soil, mats, stab, initial_geom, strict_constraints
+    ):
+        obj = OptimizationObjective(objective="min_area")
+        result = optimize_footing(
+            initial_geom, simple_load_set, soil, mats, stab, strict_constraints, obj
+        )
+        assert result.converged is False
+        assert "anchorage" in result.reason

@@ -259,7 +259,7 @@ def print_summary(summary: dict) -> None:
 # Excel export
 # ---------------------------------------------------------------------------
 
-def export_to_excel(summary: dict, filepath: str) -> None:
+def export_to_excel(summary: dict, filepath: str, detailed_trace: Optional[List[str]] = None) -> None:
     """Export the complete summary to an Excel workbook."""
     try:
         import openpyxl
@@ -327,6 +327,17 @@ def export_to_excel(summary: dict, filepath: str) -> None:
             for col, key in enumerate(headers, 1):
                 ws_st.cell(row=row, column=col, value=sr[key])
 
+    # Detailed trace
+    if detailed_trace:
+        ws_trace = wb.create_sheet("Calc_Trace")
+        ws_trace.cell(row=1, column=1, value="Paso").font = Font(bold=True)
+        ws_trace.cell(row=1, column=2, value="Detalle").font = Font(bold=True)
+        for idx, line in enumerate(detailed_trace, 2):
+            ws_trace.cell(row=idx, column=1, value=idx - 1)
+            ws_trace.cell(row=idx, column=2, value=line)
+        ws_trace.column_dimensions["A"].width = 10
+        ws_trace.column_dimensions["B"].width = 120
+
     wb.save(filepath)
     print(f"Excel report saved: {filepath}")
 
@@ -335,7 +346,7 @@ def export_to_excel(summary: dict, filepath: str) -> None:
 # Word export
 # ---------------------------------------------------------------------------
 
-def export_to_docx(summary: dict, filepath: str) -> None:
+def export_to_docx(summary: dict, filepath: str, detailed_trace: Optional[List[str]] = None) -> None:
     """Export the summary to a Word document."""
     try:
         from docx import Document
@@ -367,6 +378,11 @@ def export_to_docx(summary: dict, filepath: str) -> None:
     _add_table(doc, summary.get("design", {}).get("shear_y", {}), "One-Way Shear – Y")
     _add_table(doc, summary.get("design", {}).get("punching", {}), "Punching Shear")
 
+    if detailed_trace:
+        doc.add_heading("Calculation Trace", level=1)
+        for line in detailed_trace:
+            doc.add_paragraph(line)
+
     doc.save(filepath)
     print(f"Word report saved: {filepath}")
 
@@ -375,7 +391,7 @@ def export_to_docx(summary: dict, filepath: str) -> None:
 # PDF export
 # ---------------------------------------------------------------------------
 
-def export_to_pdf(summary: dict, filepath: str) -> None:
+def export_to_pdf(summary: dict, filepath: str, detailed_trace: Optional[List[str]] = None) -> None:
     """Export the summary to PDF using reportlab."""
     try:
         from reportlab.lib import colors
@@ -424,6 +440,23 @@ def export_to_pdf(summary: dict, filepath: str) -> None:
     for key in ("flexure_x", "flexure_y", "shear_x", "shear_y", "punching"):
         if key in dr:
             _section_table(f"Design – {key.replace('_', ' ').title()}", dr[key])
+
+    if detailed_trace:
+        story.append(Paragraph("Calculation Trace", styles["Heading2"]))
+        rows = [["Step", "Detail"]] + [[str(i + 1), line] for i, line in enumerate(detailed_trace)]
+        trace_tbl = Table(rows, colWidths=[2 * cm, 15 * cm])
+        trace_tbl.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+                ("TEXTCOLOR",  (0, 0), (-1, 0), colors.white),
+                ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#EBF3FB")]),
+                ("GRID",       (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONTSIZE",   (0, 0), (-1, -1), 8),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ])
+        )
+        story.append(trace_tbl)
 
     doc_obj.build(story)
     print(f"PDF report saved: {filepath}")

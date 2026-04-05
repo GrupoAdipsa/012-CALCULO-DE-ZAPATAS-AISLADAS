@@ -24,9 +24,11 @@ from core.soil_pressure import FootingGeometry, PressureResult
 @dataclass
 class AnchorageResult:
     Mu_transfer: float          # moment to transfer at interface [kN·m]
+    phi_Mn_transfer: float      # design moment-transfer capacity [kN·m]
     Vn_transfer: float          # nominal shear-friction capacity [kN]
     phi_Vn_transfer: float      # design shear-friction capacity [kN]
     passes_shear_friction: bool
+    passes_moment_transfer: bool
 
     ld_required: float          # required development length [mm]
     ld_available: float         # available embedment depth [mm]
@@ -200,15 +202,17 @@ def check_moment_transfer(
     Mn_bars  = n_bars / 2.0 * bar.area * fy * d_couple / 1.0e6  # [kN·m]
     phi_Mn_bars = phi_v * Mn_bars
 
+    passes_moment_transfer = Mu_transfer <= phi_Mn_bars
+
     can_be_fixed = (
         passes_dev
         and passes_sf
-        and Mu_transfer <= phi_Mn_bars
+        and passes_moment_transfer
         and pressure_result.contact_ratio >= 0.8
     )
 
     if not can_be_fixed:
-        if Mu_transfer > phi_Mn_bars:
+        if not passes_moment_transfer:
             warnings.append(
                 f"Moment transfer capacity φMn={phi_Mn_bars:.1f} kN·m < Mu={Mu_transfer:.1f} kN·m. "
                 "Fixed-base assumption is NOT justified."
@@ -249,9 +253,11 @@ def check_moment_transfer(
 
     return AnchorageResult(
         Mu_transfer=Mu_transfer,
+        phi_Mn_transfer=phi_Mn_bars,
         Vn_transfer=phi_Vn_sf / phi_v,
         phi_Vn_transfer=phi_Vn_sf,
         passes_shear_friction=passes_sf,
+        passes_moment_transfer=passes_moment_transfer,
         ld_required=ld_req,
         ld_available=ld_avail,
         passes_development=passes_dev,
